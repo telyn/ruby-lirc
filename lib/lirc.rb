@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "lirc/version"
 
 module Lirc
