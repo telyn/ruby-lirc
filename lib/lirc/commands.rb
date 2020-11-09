@@ -4,13 +4,25 @@ module LIRC
   module Commands
     module Base
       def serialize
-        "#{self.class.name} #{args}"
+        return serialize_type unless respond_to?(:members)
+
+        "#{serialize_type} #{serialize_args}"
       end
 
       private
 
+      def serialize_type
+        klass = self.class.name.split(":")[-1]
+        rest = klass[1..-1].gsub(/[A-Z]/) do |chr|
+          "_#{chr}"
+        end
+        "#{klass[0]}#{rest.upcase}"
+      end
+
       def serialize_args
-        members.map(&:send).compact.join(" ")
+        return "" unless respond_to?(:members)
+
+        members.map(&method(:send)).compact.join(" ")
       end
     end
 
