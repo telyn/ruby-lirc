@@ -1,5 +1,27 @@
 require "lirc/commands"
 
+RSpec.describe LIRC::Commands do
+  describe ".all_commands" do
+    subject { LIRC::Commands.all_commands }
+
+    it do
+      expect(Set.new(subject)).to eq(
+        Set.new(%w[
+                  SEND_ONCE
+                  SEND_START
+                  SEND_STOP
+                  LIST
+                  SET_INPUTLOG
+                  DRV_OPTION
+                  SIMULATE
+                  SET_TRANSMITTERS
+                  VERSION
+                ])
+      )
+    end
+  end
+end
+
 RSpec.describe LIRC::Commands::SendOnce do
   subject(:cmd) { described_class.new(remote, button, repeats) }
 
