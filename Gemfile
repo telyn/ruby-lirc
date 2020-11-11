@@ -11,3 +11,5 @@ gem "rspec", "~> 3.0"
 gem "guard-rspec", "~> 4.7"
 
 gem "rubocop", "~> 1.2"
+
+gem "fuubar", "~> 2.5"
