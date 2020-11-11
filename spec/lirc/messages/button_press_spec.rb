@@ -1,6 +1,6 @@
-require "lirc/reply"
+require "lirc/messages"
 
-RSpec.describe LIRC::Reply::ButtonPress do
+RSpec.describe LIRC::Messages::ButtonPress do
   describe ".parse" do
     subject { described_class.parse(reply) }
     context "with one message" do

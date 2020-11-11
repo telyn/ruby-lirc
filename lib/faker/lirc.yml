@@ -1,0 +1,13 @@
+en:
+  faker:
+    lirc:
+      reply_type:
+        - SEND_ONCE
+        - SEND_START
+        - SEND_STOP
+        - LIST
+        - SET_INPUTLOG
+        - DRV_OPTION
+        - SIMULATE
+        - SET_TRANSMITTERS
+        - VERSION
