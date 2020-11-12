@@ -8,9 +8,29 @@ module Faker
       # @return [String]
       #
       # @example
-      #   Faker::Book.title #=> "SEND_ONCE"
+      #   Faker::LIRC.button_name #=> "KEY_GREEN"
+      def button_name
+        fetch('lirc.button_name')
+      end
+
+      ##
+      # Produces a random LIRC response type
       #
-      # @faker.version 1.9.3
+      # @return [String]
+      #
+      # @example
+      #   Faker::LIRC.remote_name #=> "RMT-V189-KARAOKE"
+      def remote_name
+        fetch('lirc.remote_name')
+      end
+
+      ##
+      # Produces a random LIRC response type
+      #
+      # @return [String]
+      #
+      # @example
+      #   Faker::LIRC.reply_type #=> "SEND_ONCE"
       def reply_type
         fetch('lirc.reply_type')
       end

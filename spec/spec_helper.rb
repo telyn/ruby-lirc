@@ -3,6 +3,8 @@
 require "bundler/setup"
 require "lirc"
 
+require "faker"
+
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
@@ -13,4 +15,7 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  # use the same seed for faker as RSpec => deterministic tests!
+  Faker::Config.random = Random.new(config.seed)
 end
