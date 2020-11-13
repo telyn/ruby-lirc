@@ -5,17 +5,19 @@ module LIRC
   module Messages
     class ResponseParser
       STATES = %i[waiting_begin
-                  waiting_type
+                  waiting_command
                   waiting_success
                   waiting_data
+                  waiting_data_length
                   reading_data
                   valid].freeze
 
       PARSER_METHOD_FOR = {
         waiting_begin: :parse_begin,
-        waiting_type: :parse_type,
+        waiting_command: :parse_command,
         waiting_success: :parse_success,
         waiting_data: :parse_data,
+        waiting_data_length: :parse_data_length,
         reading_data: :read_data,
         waiting_end: :parse_end,
         valid: :raise_already_valid,
@@ -49,19 +51,19 @@ module LIRC
           raise ParseError, "unexpected line, expecting BEGIN, got #{line}"
         end
 
-        @state = :waiting_type
+        @state = :waiting_command
       end
 
-      def parse_type(line)
-        if LIRC::Commands.all_commands.include?(line)
-          @message.type = line
+      def parse_command(line)
+        if LIRC::Commands.all_commands.include?(line.split(" ").first)
+          @message.command = line
           @state = :waiting_success
         elsif line == "SIGHUP"
-          @message.type = line
+          @message.command = line
           @state = :waiting_end
         else
           raise ParseError,
-            "invalid type #{line}, expecting one of " \
+            "invalid command #{line}, expecting first word to be one of " \
             "LIRC::Commands.all_commands, or SIGHUP"
         end
       end
@@ -78,12 +80,22 @@ module LIRC
       def parse_data(line)
         case line
         when "DATA"
-          @state = :reading_data
+          @state = :waiting_data_length
         when "END"
           @state = :valid
         else
           raise ParseError, "Expecting DATA or END, got #{line}"
         end
+      end
+
+      def parse_data_length(line)
+        if line =~ /[^0-9]/
+          raise ParseError, "Expecting a number, got #{line}"
+        end
+
+        @data_lines_to_read = line.to_i
+        @message.data = []
+        @state = :reading_data
       end
 
       def parse_end(line)
@@ -95,14 +107,19 @@ module LIRC
       end
 
       def read_data(line)
-        @message.data ||= []
+        if @data_lines_to_read.zero?
+          unless line == "END"
+            raise ParseError, "Expected END, got more data: '#{line}'"
+          end
 
-        if line == "END"
-          @message.data = @message.data.join("\n").freeze
+          @message.data = @message.data&.join("\n")&.freeze
           @state = :valid
           return
         end
 
+        @message.data ||= []
+
+        @data_lines_to_read -= 1
         @message.data << line.to_s
       end
 

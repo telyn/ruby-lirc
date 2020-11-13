@@ -1,4 +1,4 @@
-require "lirc/messages"
+require "lirc/messages/response_parser"
 
 module LIRC
   # EventMachine Protocol for LIRC.
@@ -7,7 +7,7 @@ module LIRC
   # Can send Commands to LIRC with send_command.
   module Protocol
     def initialize(*args, **kwargs)
-      @message = nil
+      @response_parser = nil
       super(*args, **kwargs)
     end
 
@@ -16,9 +16,8 @@ module LIRC
     end
 
     def receive_line(line)
-      puts "parsing '#{line}'"
       line = line.chomp
-      if @message
+      if @response_parser
         parse_message_line(line)
       elsif line == "BEGIN"
         parse_message_line(line)
@@ -30,11 +29,11 @@ module LIRC
     end
 
     def parse_message_line(line)
-      @message ||= Response.new
-      @message.parse_line(line)
-      if @message.valid?
-        receive_message(@message)
-        @message = nil
+      @response_parser ||= Messages::ResponseParser.new
+      @response_parser.parse_line(line)
+      if @response_parser.valid?
+        receive_message(@response_parser.message)
+        @response_parser = nil
       end
     end
   end

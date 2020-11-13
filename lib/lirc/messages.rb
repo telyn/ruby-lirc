@@ -19,7 +19,7 @@ module LIRC
     class ParseError < StandardError; end
 
     # Responses are received over the socket in response to Commands
-    Response = Struct.new(:type, :success, :data)
+    Response = Struct.new(:command, :success, :data)
 
     # code is the hex code sent by the remote
     # button is the name of the button (if found in lircd.conf)
@@ -27,7 +27,7 @@ module LIRC
     ButtonPress = Struct.new(:code, :repeat_count, :button, :remote) do
       def self.parse(line)
         bits = line.split(" ")
-        if bits[0] =~ /[^0-9a-f]/ || bits[1] =~ /[^0-9]/
+        if bits[0] =~ /[^0-9a-fA-F]/ || bits[1] =~ /[^0-9]/
           raise ParseError, "invalid button press message '#{line}'"
         end
 

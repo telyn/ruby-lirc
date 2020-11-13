@@ -1,6 +1,9 @@
 en:
   faker:
     lirc:
+      reply_success:
+        - SUCCESS
+        - ERROR
       reply_type:
         - SEND_ONCE
         - SEND_START

@@ -22,7 +22,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
     end
 
     context "when message is a LIST" do
-      let(:message) { %w[BEGIN LIST SUCCESS DATA REMOTE_ONE REMOTE_TWO END] }
+      let(:message) { %w[BEGIN LIST SUCCESS DATA 2 REMOTE_ONE REMOTE_TWO END] }
 
       it { is_expected.to eq Response.new("LIST", true, "REMOTE_ONE\nREMOTE_TWO") }
     end
@@ -34,7 +34,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
     end
 
     context "when message is a VERSION response with an empty data section" do
-      let(:message) { %w[BEGIN VERSION SUCCESS DATA END] }
+      let(:message) { %w[BEGIN VERSION SUCCESS DATA 0 END] }
 
       it { is_expected.to eq Response.new("VERSION", true, "") }
     end
@@ -79,8 +79,8 @@ RSpec.describe LIRC::Messages::ResponseParser do
           end
         end
 
-        unless situations.include? :type
-          context "when line is some type" do
+        unless situations.include? :command
+          context "when line is some command" do
             let(:line) { Faker::LIRC.reply_type }
 
             include_examples "raises parse error"
@@ -115,6 +115,14 @@ RSpec.describe LIRC::Messages::ResponseParser do
           end
         end
 
+        unless situations.include? :integer
+          context "when line is 350" do
+            let(:line) { "350" }
+
+            include_examples "raises parse error"
+          end
+        end
+
         unless situations.include? :arbitrary_text
           context "when line is 'ham sandwich protocol initiated'" do
             let(:line) { "ham sandwich protocol initiated" }
@@ -141,7 +149,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
         context "when line is 'BEGIN'" do
           let(:line) { "BEGIN" }
 
-          include_examples "changes state", to: :waiting_type
+          include_examples "changes state", to: :waiting_command
 
           it "does not change message" do
             expect { subject }.not_to change(parser, :message)
@@ -149,19 +157,19 @@ RSpec.describe LIRC::Messages::ResponseParser do
         end
       end
 
-      context "when state is waiting_type" do
-        let(:state) { :waiting_type }
+      context "when state is waiting_command" do
+        let(:state) { :waiting_command }
 
         include_examples "raises parse error except when line is",
-                         :type
+                         :command
 
-        context "when line is some type" do
+        context "when line is some command" do
           let(:line) { Faker::LIRC.reply_type }
 
           include_examples "changes state", to: :waiting_success
 
           it "changes message type" do
-            expect { subject }.to change(parser.message, :type).to(line)
+            expect { subject }.to change(parser.message, :command).to(line)
           end
 
           it "does not change message success" do
@@ -178,8 +186,8 @@ RSpec.describe LIRC::Messages::ResponseParser do
 
           include_examples "changes state", to: :waiting_end
 
-          it "changes message type" do
-            expect { subject }.to change(parser.message, :type).to(line)
+          it "changes message command" do
+            expect { subject }.to change(parser.message, :command).to(line)
           end
 
           it "does not change message success" do
@@ -204,7 +212,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           include_examples "changes state", to: :waiting_data
 
           it "doesn't change message type" do
-            expect { subject }.not_to change(parser.message, :type)
+            expect { subject }.not_to change(parser.message, :command)
           end
 
           it "does not change message success" do
@@ -222,7 +230,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           include_examples "changes state", to: :waiting_data
 
           it "doesn't change message type" do
-            expect { subject }.not_to change(parser.message, :type)
+            expect { subject }.not_to change(parser.message, :command)
           end
 
           it "does not change message success" do
@@ -245,10 +253,10 @@ RSpec.describe LIRC::Messages::ResponseParser do
         context "when line is DATA" do
           let(:line) { "DATA" }
 
-          include_examples "changes state", to: :reading_data
+          include_examples "changes state", to: :waiting_data_length
 
           it "does not change message type" do
-            expect { subject }.not_to change(parser.message, :type)
+            expect { subject }.not_to change(parser.message, :command)
           end
 
           it "does not change message success" do
@@ -266,7 +274,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           include_examples "changes state", to: :valid
 
           it "does not change message type" do
-            expect { subject }.not_to change(parser.message, :type)
+            expect { subject }.not_to change(parser.message, :command)
           end
 
           it "does not change message success" do
@@ -279,94 +287,136 @@ RSpec.describe LIRC::Messages::ResponseParser do
         end
       end
 
+      context "when state is waiting_data_length" do
+        let(:state) { :waiting_data_length }
+
+        include_examples "raises parse error except when line is",
+                         :integer
+
+        num = Faker::Number.number(digits: 3)
+        context "when line is #{num}" do
+          let(:num) { num }
+          let(:line) { num.to_s }
+
+          include_examples "changes state", to: :reading_data
+
+          it "changes @data_lines_to_read to #{num}" do
+            expect { subject }.to(
+              change { parser.instance_variable_get(:@data_lines_to_read) }
+                .to(num)
+            )
+          end
+        end
+      end
+
       context "when state is reading_data" do
         let(:state) { :reading_data }
+        before { parser.instance_variable_set(:@data_lines_to_read, data_lines_to_read) }
 
-        lines = %w[BEGIN SIGHUP SUCCESS ERROR DATA] + [Faker::LIRC.reply_type]
-        lines.each do |line|
-          context "when line is '#{line}'" do
-            let(:line) { line }
+        context "when @data_lines_to_read is 0" do
+          let(:data_lines_to_read) { 0 }
+
+          include_examples "raises parse error except when line is",
+                           :end
+
+          context "when line is END" do
+            context "when @data_lines_to_read is 0" do
+              let(:data_lines_to_read) { 0 }
+              let(:line) { "END" }
+
+              include_examples "changes state", to: :valid
+
+              it "does not change message type" do
+                expect { subject }.not_to change(parser.message, :command)
+              end
+
+              it "does not change message success" do
+                expect { subject }.not_to change(parser.message, :success)
+              end
+
+              context "when data is empty array" do
+                before { parser.message.data = [] }
+                it "finalises data into an empty string" do
+                  expect { subject }.to change(parser.message, :data).to("")
+                end
+              end
+
+              context "when there's lots of data" do
+                before { parser.message.data = [ "hey!", "", "how ya doing?" ] }
+
+                it "finalises data" do
+                  expect { subject }.to change(parser.message, :data).to("hey!\n\nhow ya doing?")
+                end
+              end
+            end
+          end
+        end
+
+        context "when @data_lines_to_read is some number" do
+          let(:data_lines_to_read) { 1 + Faker::Number.digit }
+
+          lines = %w[BEGIN SIGHUP SUCCESS ERROR DATA END] + [Faker::LIRC.reply_type]
+          lines.each do |line|
+            context "when line is '#{line}'" do
+              let(:line) { line }
+              it "does not change state" do
+                expect { subject rescue nil }.not_to change { parser.instance_variable_get(:@state) }
+              end
+
+              it "changes @data_lines_to_read to 0" do
+                expect { subject }.to change { parser.instance_variable_get(:@data_lines_to_read) }.by(-1)
+              end
+
+              it "does not change message type" do
+                expect { subject }.not_to change(parser.message, :command)
+              end
+
+              it "does not change message success" do
+                expect { subject }.not_to change(parser.message, :success)
+              end
+
+              it "changes message data" do
+                expect { subject }.to change { parser.message.data }.to([line])
+              end
+            end
+          end
+
+          context "when line is 'something I forgot about ham'" do
+            let(:line) { "something I forgot about ham" }
+
             it "does not change state" do
               expect { subject rescue nil }.not_to change { parser.instance_variable_get(:@state) }
             end
 
             it "does not change message type" do
-              expect { subject }.not_to change(parser.message, :type)
+              expect { subject }.not_to change(parser.message, :command)
             end
 
             it "does not change message success" do
               expect { subject }.not_to change(parser.message, :success)
             end
 
-            it "changes message data" do
-              expect { subject }.to change { parser.message.data }.to([line])
-            end
-          end
-        end
-
-        context "when line is 'something I forgot about ham'" do
-          let(:line) { "something I forgot about ham" }
-
-          it "does not change state" do
-            expect { subject rescue nil }.not_to change { parser.instance_variable_get(:@state) }
-          end
-
-          it "does not change message type" do
-            expect { subject }.not_to change(parser.message, :type)
-          end
-
-          it "does not change message success" do
-            expect { subject }.not_to change(parser.message, :success)
-          end
-
-          context "when there's not any data yet" do
-            it "changes message data" do
-              expect { subject }.to change { parser.message.data }.to(["something I forgot about ham"])
-            end
-          end
-
-          context "when theres some data already" do
-            before(:each) do
-              parser.message.data = (1 + rand(5)).times
-                                                 .map { Faker::Lorem.sentence }
+            context "when there's not any data yet" do
+              it "changes message data" do
+                expect { subject }.to change { parser.message.data }.to(["something I forgot about ham"])
+              end
             end
 
-            it "doesn't mess with the old lines" do
-              orig_count = parser.message.data.length
-              expect { subject }.not_to change { parser.message.data[0...orig_count] }
-            end
+            context "when theres some data already" do
+              before(:each) do
+                parser.message.data = (1 + rand(5)).times
+                  .map { Faker::Lorem.sentence }
+              end
 
-            it "adds new line" do
-              expect { subject }.to change { parser.message.data.length }.by(1)
-              expect(parser.message.data.last).to eq "something I forgot about ham"
-            end
-          end
-        end
+              it "doesn't mess with the old lines" do
+                orig_count = parser.message.data.length
+                expect { subject }.not_to change { parser.message.data[0...orig_count] }
+              end
 
-        context "when line is END" do
-          let(:line) { "END" }
-
-          include_examples "changes state", to: :valid
-
-          it "does not change message type" do
-            expect { subject }.not_to change(parser.message, :type)
-          end
-
-          it "does not change message success" do
-            expect { subject }.not_to change(parser.message, :success)
-          end
-
-          context "when data is empty array" do
-            it "finalises data into an empty string" do
-              expect { subject }.to change(parser.message, :data).to("")
-            end
-          end
-
-          context "when there's lots of data" do
-            before { parser.message.data = [ "hey!", "", "how ya doing?" ] }
-
-            it "finalises data" do
-              expect { subject }.to change(parser.message, :data).to("hey!\n\nhow ya doing?")
+              it "adds new line" do
+                expect { subject }.to change { parser.message.data.length }.by(1)
+                expect(parser.message.data.last).to eq "something I forgot about ham"
+              end
             end
           end
         end

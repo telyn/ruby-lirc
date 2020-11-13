@@ -34,6 +34,17 @@ module Faker
       def reply_type
         fetch('lirc.reply_type')
       end
+
+      ##
+      # Produces a random LIRC response success
+      #
+      # @return [String]
+      #
+      # @example
+      #   Faker::LIRC.reply_type #=> "SUCCESS"
+      def reply_success
+        fetch('lirc.reply_success')
+      end
     end
   end
 end
