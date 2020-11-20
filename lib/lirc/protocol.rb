@@ -6,13 +6,19 @@ module LIRC
   # Internally relies on Messages for parsing.
   # Can send Commands to LIRC with send_command.
   module Protocol
+    include EventMachine::Protocols::LineProtocol
     def initialize(*args, **kwargs)
       @response_parser = nil
       super(*args, **kwargs)
     end
 
+    def self.included(klass)
+      klass.instance_exec { include EventMachine::Protocols::LineProtocol }
+    end
+
     def send_command(command)
       # TODO: implement
+      send_data "#{command.serialize}\n"
     end
 
     def receive_line(line)

@@ -1,2 +1,64 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
+
+require "eventmachine"
+require "lirc/protocol"
+require "lirc/commands"
+
+server = ENV["LIRCD_SERVER"]
+port = ENV["LIRCD_PORT"].to_i || 8765
+if server.nil? || port == 0
+  puts "LIRCD_SERVER or LIRCD_PORT env var missing"
+end
+
+unless ARGV.size == 3
+  puts "Usage: irsend <remote> <button> <repeat count>"
+  exit 1
+end
+
+remote, button, repeats = ARGV[0,3]
+repeats = repeats.to_i
+
+command_to_send = LIRC::Commands::SendOnce.new(remote, button, repeats)
+
+exit_code = 0;
+
+class IRSendConn < EventMachine::Connection
+  include LIRC::Protocol
+
+  def initialize(command_to_send, *args)
+    @awaiting_response_for = command_to_send.serialize
+    super(*args)
+  end
+
+  def receive_message(message)
+    return unless message.is_a? LIRC::Messages::Response
+
+    if message.command == @awaiting_response_for
+      if message.success
+        puts "#{@awaiting_response_for.split(" ").first} succeeded!"
+        exit
+      else
+        puts "Command failed!"
+        exit(1)
+      end
+    else
+      puts "got an irrelevant message"
+      puts message.inspect
+    end
+  end
+
+  def exit(code = 0)
+    exit_code = code
+    EventMachine.stop
+  end
+end
+
+puts "attempting to connect to #{server}:#{port}"
+EventMachine.run do
+  EventMachine.connect(server, port, IRSendConn, command_to_send) do |connection|
+    connection.send_command(command_to_send)
+  end
+end
+
+exit(exit_code)
