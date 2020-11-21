@@ -38,7 +38,9 @@ module LIRC
       @response_parser ||= Messages::ResponseParser.new
       @response_parser.parse_line(line)
       if @response_parser.valid?
-        receive_message(@response_parser.message)
+        msg = @response_parser.message
+        resolve_response(msg) if msg.is_a? Response
+        receive_message(msg)
         @response_parser = nil
       end
     end
@@ -46,15 +48,16 @@ module LIRC
     private
 
     # resolve here means like Promises - Deferrables are pretty much promises
-    def resolve_message(message)
-      deferrable = message_deferrables[message]
+    def resolve_response(response)
+      deferrable = response_deferrables[message.command]
       return if deferrable.nil?
 
-      if message.success
-        deferrable.fail(message)
+      if response.success
+        deferrable.fail(response)
       else
-        deferrable.succeed(message)
+        deferrable.succeed(response)
       end
+      deferrable.delete(response.command)
     end
 
     def message_deferrables
