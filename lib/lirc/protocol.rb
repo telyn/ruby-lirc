@@ -7,6 +7,11 @@ module LIRC
   # Can send Commands to LIRC with send_command.
   module Protocol
     include EventMachine::Protocols::LineProtocol
+
+    def self.connect!(server:, port: 8765, &block)
+      EventMachine.connect(server, port, self, &block)
+    end
+
     def initialize(*args, **kwargs)
       @response_parser = nil
       super(*args, **kwargs)
@@ -18,7 +23,7 @@ module LIRC
 
     def send_command(command)
       send_data "#{command.serialize}\n"
-      message_deferrables[command.serialize] ||= EM::DefaultDeferrable.new
+      response_deferrables[command.serialize] ||= EM::DefaultDeferrable.new
     end
 
     def receive_line(line)
@@ -39,8 +44,8 @@ module LIRC
       @response_parser.parse_line(line)
       if @response_parser.valid?
         msg = @response_parser.message
-        resolve_response(msg) if msg.is_a? Response
-        receive_message(msg)
+        resolve_response(msg) if msg.is_a? Messages::Response
+        receive_message(msg) if defined?(receive_message)
         @response_parser = nil
       end
     end
@@ -49,19 +54,19 @@ module LIRC
 
     # resolve here means like Promises - Deferrables are pretty much promises
     def resolve_response(response)
-      deferrable = response_deferrables[message.command]
+      deferrable = response_deferrables[response.command]
       return if deferrable.nil?
 
       if response.success
-        deferrable.fail(response)
-      else
         deferrable.succeed(response)
+      else
+        deferrable.fail(response)
       end
-      deferrable.delete(response.command)
+      response_deferrables.delete(response.command)
     end
 
-    def message_deferrables
-      @message_deferrables ||= {}
+    def response_deferrables
+      @response_deferrables ||= {}
     end
   end
 end
