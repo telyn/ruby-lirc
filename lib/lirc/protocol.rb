@@ -17,8 +17,8 @@ module LIRC
     end
 
     def send_command(command)
-      # TODO: implement
       send_data "#{command.serialize}\n"
+      message_deferrables[command.serialize] ||= EM::DefaultDeferrable.new
     end
 
     def receive_line(line)
@@ -41,6 +41,24 @@ module LIRC
         receive_message(@response_parser.message)
         @response_parser = nil
       end
+    end
+
+    private
+
+    # resolve here means like Promises - Deferrables are pretty much promises
+    def resolve_message(message)
+      deferrable = message_deferrables[message]
+      return if deferrable.nil?
+
+      if message.success
+        deferrable.fail(message)
+      else
+        deferrable.succeed(message)
+      end
+    end
+
+    def message_deferrables
+      @message_deferrables ||= {}
     end
   end
 end
