@@ -128,19 +128,32 @@ RSpec.describe LIRC::Protocol do
               end
             end
 
-            it "calls the deferrable" do
-              subject
-              expect(deferrable).to have_received(:succeed).with(message)
-              expect(deferrable).not_to have_received(:fail)
+            context "when success is false" do
+              let(:success) { false }
+              it "calls the deferrable" do
+                subject
+                expect(deferrable).to have_received(:fail).with(message)
+                expect(deferrable).not_to have_received(:succeed)
+              end
+
             end
 
-            context "when prior command has had a response already" do
-              before { protocol.receive_line(line + "\n") }
-
-              it "doesn't call deferrable" do
+            context "when success is true" do
+              let(:success) { true }
+              it "calls the deferrable" do
                 subject
-                expect(deferrable).to have_received(:succeed).once
+                expect(deferrable).to have_received(:succeed).with(message)
                 expect(deferrable).not_to have_received(:fail)
+              end
+
+              context "when prior command has had a response already" do
+                before { protocol.receive_line(line + "\n") }
+
+                it "doesn't call deferrable" do
+                  subject
+                  expect(deferrable).to have_received(:succeed).once
+                  expect(deferrable).not_to have_received(:fail)
+                end
               end
             end
           end
