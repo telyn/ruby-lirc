@@ -1,4 +1,5 @@
 require "lirc/messages/response_parser"
+require "eventmachine"
 
 module LIRC
   # EventMachine Protocol for LIRC.
@@ -39,18 +40,18 @@ module LIRC
       end
     end
 
+    private
+
     def parse_message_line(line)
       @response_parser ||= Messages::ResponseParser.new
       @response_parser.parse_line(line)
       if @response_parser.valid?
         msg = @response_parser.message
         resolve_response(msg) if msg.is_a? Messages::Response
-        receive_message(msg) if defined?(receive_message)
+        receive_message(msg) if respond_to?(:receive_message)
         @response_parser = nil
       end
     end
-
-    private
 
     # resolve here means like Promises - Deferrables are pretty much promises
     def resolve_response(response)

@@ -2,6 +2,6 @@
 
 RSpec.describe Lirc do
   it "has a version number" do
-    expect(Lirc::VERSION).not_to be nil
+    expect(Lirc::VERSION).to match(/^\d+\.\d+\.\d+$/)
   end
 end
