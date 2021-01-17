@@ -1,8 +1,10 @@
 # Lirc
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/lirc`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+I promise I'll write proper instructions on usage eventually, but for now I'm
+using it in
+[ps2bootlink](https://github.com/telyn/ps2client-rb/blob/master/bin/ps2bootlink)
+from my [ps2client-rb](https://github.com/telyn/ps2client-rb) repo - so take a
+look there for how I'm using it
 
 ## Installation
 
