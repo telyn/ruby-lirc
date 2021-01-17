@@ -1,7 +1,9 @@
 require "lirc/messages/response_parser"
+require "logger"
 require "eventmachine"
 
 module LIRC
+  DEFAULT_PORT = 8765
   # EventMachine Protocol for LIRC.
   #
   # Internally relies on Messages for parsing.
@@ -9,17 +11,14 @@ module LIRC
   module Protocol
     include EventMachine::Protocols::LineProtocol
 
-    def self.connect!(server:, port: 8765, &block)
+    def self.connect!(server:, port: DEFAULT_PORT, &block)
       EventMachine.connect(server, port, self, &block)
     end
 
-    def initialize(*args, **kwargs)
-      @response_parser = nil
-      super(*args, **kwargs)
-    end
+    def initialize(*args, logger: Logger.new(STDERR), **kwargs)
+      @logger = logger
 
-    def self.included(klass)
-      klass.instance_exec { include EventMachine::Protocols::LineProtocol }
+      super(*args, **kwargs)
     end
 
     def send_command(command)
@@ -31,12 +30,12 @@ module LIRC
       line = line.chomp
       if @response_parser
         parse_message_line(line)
-      elsif line == "BEGIN"
+      elsif line.eql?("BEGIN")
         parse_message_line(line)
       elsif line =~ /^[0-9a-f]/
         receive_message(Messages::ButtonPress.parse(line))
       else
-        STDERR.puts "Received unknown line from lirc: #{line}"
+        logger.warn "Received unknown line from lirc: #{line}"
       end
     end
 
@@ -47,7 +46,7 @@ module LIRC
       @response_parser.parse_line(line)
       if @response_parser.valid?
         msg = @response_parser.message
-        resolve_response(msg) if msg.is_a? Messages::Response
+        resolve_response(msg)
         receive_message(msg) if respond_to?(:receive_message)
         @response_parser = nil
       end
@@ -69,5 +68,7 @@ module LIRC
     def response_deferrables
       @response_deferrables ||= {}
     end
+
+    attr_reader :logger
   end
 end

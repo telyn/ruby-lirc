@@ -1,15 +1,21 @@
 require "lirc/protocol"
 require "faker/lirc"
 
+module InitializeArgsTestModule
+  def initialize(*args, **kwargs)
+    @args = args
+    @kwargs = kwargs
+  end
+
+  attr_reader :args, :kwargs
+end
+
 class TestProtocol
+  include InitializeArgsTestModule
   include LIRC::Protocol
 
   def messages
     @messages ||= []
-  end
-
-  def receive_message(message)
-    messages << message
   end
 
   def send_data(data)
@@ -21,6 +27,15 @@ class TestProtocol
   end
 end
 
+class ReceiveMessageTestProtocol < TestProtocol
+  include LIRC::Protocol
+
+  def receive_message(message)
+    messages << message
+  end
+end
+
+
 def fake_command(message)
   double(LIRC::Commands::Base).tap do |c|
     allow(c).to receive(:serialize).and_return(message)
@@ -28,8 +43,75 @@ def fake_command(message)
 end
 
 RSpec.describe LIRC::Protocol do
-  subject(:protocol) { TestProtocol.new }
+  subject(:protocol) { TestProtocol.new(logger: logger) }
   Messages = LIRC::Messages
+  let(:logger) { instance_double(Logger) }
+
+  # this is a simple sense-check that ensures that LineProtocol works
+  # the receive_line method does .chomp just in case LineProtocol's semantics
+  # change, which is why a_string_including is used in this test - to avoid
+  # tying the test to those semantics.
+  it "when included in another class, also includes LineProtocol" do
+    expect(protocol).to respond_to(:receive_data)
+    expect(protocol).to receive(:receive_line).with(a_string_including("jeff"))
+    protocol.receive_data("j")
+    protocol.receive_data("e")
+    protocol.receive_data("f")
+    protocol.receive_data("f")
+    protocol.receive_data("\n")
+  end
+
+  describe ".connect!" do
+    let(:server) { "server" }
+    let(:port) { 1111 }
+
+    it "calls EventMachine.connect correctly" do
+      block = -> (_a, b, _c) { }
+      expect(EventMachine).to(receive(:connect)
+        .with(server, port, described_class) do |*args, &blk|
+          expect(blk).to equal(block)
+        end)
+      described_class.connect!(server: server, port: port, &block)
+    end
+
+    context "when port is not specified" do
+      it "calls EventMachine.connect correctly" do
+        expect(EventMachine).to(receive(:connect)
+          .with(server, LIRC::DEFAULT_PORT, described_class))
+        described_class.connect!(server: server)
+      end
+    end
+  end
+
+  describe "#initialize" do
+    subject { TestProtocol.new(*args, **params) }
+    let(:params) { { logger: logger, server: "127.0.0.1", port: "8765" } }
+    let(:expected) { params.dup.tap { |p| p.delete(:logger) } }
+    let(:args) { ["this is a test"] }
+
+    it "passes everything except the logger up to EM" do
+      expect(subject.kwargs).to eq(expected)
+      expect(subject.args).to eq(args)
+    end
+
+    it "sets logger to logger" do
+      expect(subject.send(:logger)).to eq params[:logger]
+    end
+
+    context "when logger is not set" do
+      let(:params) { {} }
+      let(:args) { [] }
+
+      let(:logger) { instance_double(Logger) }
+      before { allow(Logger).to receive(:new).and_return(logger).once }
+
+      it "defaults logger to one which uses STDERR" do
+        subject
+        expect(Logger).to have_received(:new).with(STDERR)
+        expect(subject.send(:logger)).to eq(logger)
+      end
+    end
+  end
 
   describe "#send_command" do
     subject { protocol.send_command(command) }
@@ -50,7 +132,7 @@ RSpec.describe LIRC::Protocol do
   end
 
   describe "#receive_line" do
-    describe "new style" do
+    describe "mockist style" do
       subject { protocol.receive_line(line + "\n") }
 
       context "when receiving a button press" do
@@ -67,15 +149,15 @@ RSpec.describe LIRC::Protocol do
         let(:line) { [code_hex, repeats, name, remote_name].join(" ") }
 
         it "emits send_message" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
+          expect(protocol).to receive(:receive_message).with(
             Messages::ButtonPress.new(code_number, repeats, name, remote_name)
-          ])
+          ).once
+          subject
         end
       end
 
-
       context "when receiving some text" do
-        let(:line) { "BEGIN" }
+        let(:line) { "fake message here" }
         let(:original_command) { "main screen turn on" }
         let(:message) do
           Messages::Response.new(original_command, success, data)
@@ -87,7 +169,7 @@ RSpec.describe LIRC::Protocol do
           instance_double(Messages::ResponseParser).tap do |parser|
             allow(parser).to receive(:valid?).and_return(valid)
             allow(parser).to receive(:parse_line).with(line)
-            allow(parser).to receive(:message).and_return(message)
+            allow(parser).to receive(:message).and_return(message) if valid
           end
         end
 
@@ -95,282 +177,162 @@ RSpec.describe LIRC::Protocol do
           allow(Messages::ResponseParser).to receive(:new).and_return(parser)
         end
 
-        context "when this validates the message" do
-          let(:valid) { true }
+        context "when message is not begun yet" do
+          let(:valid) { false }
 
-          it "calls #receive_message" do
-            allow(protocol).to receive(:receive_message)
-            subject
-            expect(protocol).to have_received(:receive_message).with(message)
-          end
+          context "when line is BEGIN" do
+            let(:line) { "BEGIN" }
 
-          context "when there's a different command waiting for a response" do
-            let!(:deferrable) do
-              protocol.send_command(fake_command("floobyjoob")).tap do |d|
-                allow(d).to receive(:succeed)
-                allow(d).to receive(:fail)
-              end
-            end
-
-            it "doesn't calls the deferrable" do
+            it "calls #parse_line" do
               subject
-              expect(deferrable).not_to have_received(:succeed)
-              expect(deferrable).not_to have_received(:fail)
+              expect(parser).to have_received(:parse_line).with(line).once
             end
-          end
 
-          context "when it's in response to a prior command" do
-            let(:command) { fake_command(original_command) }
-            let!(:deferrable) do
-              protocol.send_command(command).tap do |d|
-                allow(d).to receive(:succeed)
-                allow(d).to receive(:fail)
+            context "when it's in response to a prior command" do
+              let(:command) { fake_command(original_command) }
+              let!(:deferrable) do
+                protocol.send_command(command).tap do |d|
+                  allow(d).to receive(:succeed)
+                  allow(d).to receive(:fail)
+                end
               end
-            end
 
-            context "when success is false" do
-              let(:success) { false }
-              it "calls the deferrable" do
+              it "doesn't call the deferrable" do
                 subject
-                expect(deferrable).to have_received(:fail).with(message)
                 expect(deferrable).not_to have_received(:succeed)
-              end
-
-            end
-
-            context "when success is true" do
-              let(:success) { true }
-              it "calls the deferrable" do
-                subject
-                expect(deferrable).to have_received(:succeed).with(message)
                 expect(deferrable).not_to have_received(:fail)
               end
+            end
+          end
 
-              context "when prior command has had a response already" do
-                before { protocol.receive_line(line + "\n") }
+          context "when line is gibberish" do
+            let(:line) { "gibberish" }
 
-                it "doesn't call deferrable" do
+            it "warns" do
+              expect(logger).to receive(:warn).with("Received unknown line from lirc: gibberish")
+              subject
+            end
+          end
+        end
+
+        context "when message is already begun" do
+          let(:parser) do
+            instance_double(Messages::ResponseParser).tap do |parser|
+              allow(parser).to receive(:valid?).and_return(false, valid)
+              allow(parser).to receive(:parse_line).with("BEGIN").once
+              allow(parser).to receive(:parse_line).with(line).once
+              allow(parser).to receive(:message).and_return(message) if valid
+            end
+          end
+
+          before do
+            protocol.receive_line("BEGIN\n")
+          end
+
+          context "when this line makes the message valid" do
+            let(:valid) { true }
+
+            it "calls #parse_line" do
+              subject
+              expect(parser).to have_received(:parse_line).with(line)
+            end
+
+            context "when protocol has #receive_message" do
+              let(:protocol) { TestProtocol.new(logger: logger) }
+
+              it "calls #receive_message" do
+                allow(protocol).to receive(:receive_message)
+                subject
+                expect(protocol).to have_received(:receive_message).with(message)
+              end
+            end
+
+            context "when there's a different command waiting for a response" do
+              let!(:deferrable) do
+                protocol.send_command(fake_command("floobyjoob")).tap do |d|
+                  allow(d).to receive(:succeed)
+                  allow(d).to receive(:fail)
+                end
+              end
+
+              it "doesn't call the deferrable" do
+                subject
+                expect(deferrable).not_to have_received(:succeed)
+                expect(deferrable).not_to have_received(:fail)
+              end
+            end
+
+            context "when it's in response to a prior command" do
+              let(:command) { fake_command(original_command) }
+              let!(:deferrable) do
+                protocol.send_command(command).tap do |d|
+                  allow(d).to receive(:succeed)
+                  allow(d).to receive(:fail)
+                end
+              end
+
+              context "when success is false" do
+                let(:success) { false }
+                it "calls the deferrable" do
                   subject
-                  expect(deferrable).to have_received(:succeed).once
+                  expect(deferrable).to have_received(:fail).with(message)
+                  expect(deferrable).not_to have_received(:succeed)
+                end
+
+              end
+
+              context "when success is true" do
+                let(:success) { true }
+                it "calls the deferrable" do
+                  subject
+                  expect(deferrable).to have_received(:succeed).with(message)
                   expect(deferrable).not_to have_received(:fail)
+                end
+
+                context "when prior command has had a response already" do
+                  let(:first_parser) do
+                    instance_double(Messages::ResponseParser).tap do |parser|
+                      allow(parser).to receive(:valid?).and_return(false, true)
+                      allow(parser).to receive(:parse_line).with("BEGIN").once
+                      allow(parser).to receive(:parse_line).with(line).once
+                      allow(parser).to receive(:message).and_return(message) if valid
+                    end
+                  end
+
+                  before do
+                    allow(Messages::ResponseParser).to receive(:new).and_return(first_parser, parser)
+                    protocol.receive_line(line + "\n")
+                    protocol.receive_line("BEGIN")
+                  end
+
+                  it "doesn't call deferrable" do
+                    subject
+                    expect(deferrable).to have_received(:succeed).once
+                    expect(deferrable).not_to have_received(:fail)
+                  end
                 end
               end
             end
           end
-        end
-      end
-    end
 
-    xdescribe "integration" do
-      subject do
-        Array(lines).each do |line|
-          protocol.receive_line(line + "\n")
-        end
-      end
+          context "when this line does not make message valid" do
+            let(:valid) { false }
 
-      let(:cmd) { Commands::SendOnce.new(*(lines[1].split(" ")[1..])) }
-
-      context "when receiving a SEND_ONCE response" do
-        context "with repeats" do
-          let(:lines) do
-            ["BEGIN", "SEND_ONCE PS2 Reset 10", success, "END"]
-          end
-          let(:success) { Faker::LIRC.reply_success }
-
-          it "emits Response" do
-            expect { subject }.to change(protocol, :messages).from([]).to([
-              Messages::Response.new("SEND_ONCE PS2 Reset 10", success == "SUCCESS", nil)
-            ])
-          end
-        end
-
-        context "without repeats" do
-          let(:lines) do
-            ["BEGIN", "SEND_ONCE PS2 Reset", success, "END"]
-          end
-          let(:success) { Faker::LIRC.reply_success }
-
-          it "emits Response" do
-            expect { subject }.to change(protocol, :messages).from([]).to([
-              Messages::Response.new("SEND_ONCE PS2 Reset", success == "SUCCESS", nil)
-            ])
-          end
-        end
-      end
-
-      context "when receiving a SIGHUP response" do
-        let(:lines) do
-          ["BEGIN", "SIGHUP", "END"]
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SIGHUP", nil, nil)
-          ])
-        end
-      end
-
-      context "when receiving a SEND_START response" do
-        let(:lines) do
-          ["BEGIN", "SEND_START PS2 Reset", success, "END"]
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SEND_START PS2 Reset", success == "SUCCESS", nil)
-          ])
-        end
-      end
-
-      context "when receiving a SEND_STOP response" do
-        let(:lines) do
-          ["BEGIN", "SEND_STOP PS2 Reset", success, "END"]
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SEND_STOP PS2 Reset", success == "SUCCESS", nil)
-          ])
-        end
-      end
-
-      context "when receiving a LIST response" do
-        context "when response lists remotes" do
-          let(:lines) do
-            ["BEGIN", "LIST", success, "DATA", items.length.to_s, items, "END"].flatten
-          end
-
-          let(:success) { Faker::LIRC.reply_success }
-
-          context "with 6 items" do
-            let(:items) { 6.times.map { Faker::LIRC.remote_name } }
-
-            it "emits Response" do
-              expect { subject }.to change(protocol, :messages).from([]).to([
-                Messages::Response.new("LIST", success == "SUCCESS", items.join("\n"))
-              ])
-            end
-          end
-
-          context "with 0 items" do
-            let(:items) { [] }
-
-            it "emits Response" do
-              expect { subject }.to change(protocol, :messages).from([]).to([
-                Messages::Response.new("LIST", success == "SUCCESS", "")
-              ])
-            end
-          end
-        end
-
-        context "when response lists buttons" do
-          let(:lines) do
-            ["BEGIN", "LIST PS2", success, "DATA", items.length.to_s, items, "END"].flatten
-          end
-
-          let(:success) { Faker::LIRC.reply_success }
-
-          context "with 6 items" do
-            let(:items) do
-              <<~BUTTONS.split("\n")
-            0000000000068b5b KEY_OPEN
-            00000000000a8b5b Reset
-            0000000000026b92 KEY_AUDIO
-            00000000000acb92 Shuffle
-            0000000000000b92 KEY_1
-            0000000000080b92 KEY_2
-              BUTTONS
+            it "calls #parse_line" do
+              subject
+              expect(parser).to have_received(:parse_line).with(line)
             end
 
-            it "emits Response" do
-              expect { subject }.to change(protocol, :messages).from([]).to([
-                Messages::Response.new("LIST PS2", success == "SUCCESS", items.join("\n"))
-              ])
+            context "when it's in response to a prior command" do
+              let(:command) { fake_command(original_command) }
+              let!(:deferrable) do
+                protocol.send_command(command).tap do |d|
+                  allow(d).to receive(:succeed)
+                  allow(d).to receive(:fail)
+                end
+              end
             end
           end
-
-          context "with 0 items" do
-            let(:items) { [] }
-
-            it "emits Response" do
-              expect { subject }.to change(protocol, :messages).from([]).to([
-                Messages::Response.new("LIST PS2", success == "SUCCESS", "")
-              ])
-            end
-          end
-        end
-      end
-
-      context "when receiving a SET_INPUTLOG response" do
-        let(:lines) do
-          ["BEGIN", "SET_INPUTLOG", success, "END"].flatten
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SET_INPUTLOG", success == "SUCCESS", nil)
-          ])
-        end
-      end
-
-      context "when receiving a DRV_OPTION response" do
-        let(:lines) do
-          ["BEGIN", "DRV_OPTION", success, "END"].flatten
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("DRV_OPTION", success == "SUCCESS", nil)
-          ])
-        end
-      end
-
-      context "when receiving a SIMULATE response" do
-        let(:lines) do
-          ["BEGIN",
-           "SIMULATE 0000111144443333 1 TEST TEST",
-           "ERROR",
-           "DATA",
-           "1",
-           "SIMULATE command is disabled",
-           "END"].flatten
-        end
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SIMULATE 0000111144443333 1 TEST TEST", false, "SIMULATE command is disabled")
-          ])
-        end
-      end
-
-      context "when receiving a SET_TRANSMITTERS response" do
-        let(:lines) do
-          ["BEGIN", "SET_TRANSMITTERS", success, "END"].flatten
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("SET_TRANSMITTERS", success == "SUCCESS", nil)
-          ])
-        end
-      end
-
-      context "when receiving a VERSION response" do
-        let(:lines) do
-          ["BEGIN", "VERSION", success, "DATA", "1", "0.10.1", "END"].flatten
-        end
-        let(:success) { Faker::LIRC.reply_success }
-
-        it "emits Response" do
-          expect { subject }.to change(protocol, :messages).from([]).to([
-            Messages::Response.new("VERSION", success == "SUCCESS", "0.10.1")
-          ])
         end
       end
     end
