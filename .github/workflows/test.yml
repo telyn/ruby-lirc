@@ -1,8 +1,10 @@
+---
+
+name: Runtests
 on:
   - push
   - pull_request
 
-name: Run tests
 jobs:
   rspec:
     name: RSpec
@@ -32,6 +34,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     matrix: *ruby-matrix
     steps:
-      - user: actions/checkout@v2
+      - uses: actions/checkout@v2
       - *setup-ruby-with-matrix
       - run: bundle exec gem build lirc.gem
