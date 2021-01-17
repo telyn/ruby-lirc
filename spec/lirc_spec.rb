@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-RSpec.describe Lirc do
+RSpec.describe LIRC do
   it "has a version number" do
-    expect(Lirc::VERSION).to match(/^\d+\.\d+\.\d+$/)
+    expect(LIRC::VERSION).to match(/^\d+\.\d+\.\d+$/)
   end
 end
