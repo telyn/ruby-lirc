@@ -7,7 +7,27 @@ RSpec.describe LIRC::Messages::ResponseParser do
 
   let(:state) { :waiting_begin }
 
-  describe "full parser lifecycle" do
+  describe "#valid?" do
+    subject { parser.valid? }
+
+    invalid_states = described_class::STATES.dup
+    invalid_states.delete(:valid)
+
+    context "when state is :valid" do
+      let(:state) { :valid }
+
+      it { is_expected.to be true }
+    end
+
+    invalid_states.each do |state|
+      context "when state is :#{state}" do
+        let(:state) { state }
+        it { is_expected.to be false }
+      end
+    end
+  end
+
+  describe "#message" do
     subject(:parser) { described_class.new }
     subject { parser.message }
 
@@ -48,9 +68,13 @@ RSpec.describe LIRC::Messages::ResponseParser do
     # inside the parser's instance variables, delete it. It was helpful when I
     # wrote the parser :-)
     describe "internals" do
-      shared_examples_for "raises parse error" do
+      shared_examples_for "raises parse error" do |error_message = nil|
         it "raises parse error" do
-          expect { subject }.to raise_error(LIRC::Messages::ParseError)
+          if error_message
+            expect { subject }.to raise_error(LIRC::Messages::ParseError, sprintf(error_message, line: line))
+          else
+            expect { subject }.to raise_error(LIRC::Messages::ParseError)
+          end
         end
 
         it "does not change state" do
@@ -70,12 +94,12 @@ RSpec.describe LIRC::Messages::ResponseParser do
         end
       end
 
-      shared_examples_for "raises parse error except when line is" do |*situations|
+      shared_examples_for "raises parse error except when line is" do |*situations, msg: nil|
         unless situations.include? :begin
           context "when line is 'BEGIN'" do
             let(:line) { "BEGIN" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -83,13 +107,13 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is some command" do
             let(:line) { Faker::LIRC.reply_type }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
 
           context "when line is 'SIGHUP'" do
             let(:line) { "SIGHUP" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -97,13 +121,13 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is 'SUCCESS'" do
             let(:line) { "SUCCESS" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
 
           context "when line is 'ERROR'" do
             let(:line) { "ERROR" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -111,7 +135,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is 'DATA'" do
             let(:line) { "DATA" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -119,7 +143,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is 350" do
             let(:line) { "350" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -127,7 +151,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is 'ham sandwich protocol initiated'" do
             let(:line) { "ham sandwich protocol initiated" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
 
@@ -135,7 +159,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           context "when line is 'END'" do
             let(:line) { "END" }
 
-            include_examples "raises parse error"
+            include_examples "raises parse error", msg
           end
         end
       end
@@ -144,7 +168,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
         let(:state) { :waiting_begin }
 
         include_examples "raises parse error except when line is",
-                         :begin
+                         :begin, msg: "unexpected line, expecting BEGIN, got %{line}"
 
         context "when line is 'BEGIN'" do
           let(:line) { "BEGIN" }
@@ -161,10 +185,10 @@ RSpec.describe LIRC::Messages::ResponseParser do
         let(:state) { :waiting_command }
 
         include_examples "raises parse error except when line is",
-                         :command
+          :command, msg: "invalid command %{line}, expecting first word to be one of LIRC::Commands.all_commands, or SIGHUP"
 
         context "when line is some command" do
-          let(:line) { Faker::LIRC.reply_type }
+          let(:line) { Faker::LIRC.reply_type + " argument1 argument2" }
 
           include_examples "changes state", to: :waiting_success
 
@@ -204,7 +228,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
         let(:state) { :waiting_success }
 
         include_examples "raises parse error except when line is",
-                         :success
+                         :success, msg: "Expecting SUCCESS or ERROR, got %{line}"
 
         context "when line is SUCCESS" do
           let(:line) { "SUCCESS" }
@@ -248,7 +272,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
 
         include_examples "raises parse error except when line is",
                          :data,
-                         :end
+                         :end, msg: "Expecting DATA or END, got %{line}"
 
         context "when line is DATA" do
           let(:line) { "DATA" }
@@ -291,7 +315,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
         let(:state) { :waiting_data_length }
 
         include_examples "raises parse error except when line is",
-                         :integer
+                         :integer, msg: "Expecting a number, got %{line}"
 
         num = Faker::Number.number(digits: 3)
         context "when line is #{num}" do
@@ -317,7 +341,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
           let(:data_lines_to_read) { 0 }
 
           include_examples "raises parse error except when line is",
-                           :end
+                           :end, msg: "Expecting END, got more data: '%{line}'"
 
           context "when line is END" do
             context "when @data_lines_to_read is 0" do
@@ -336,16 +360,18 @@ RSpec.describe LIRC::Messages::ResponseParser do
 
               context "when data is empty array" do
                 before { parser.message.data = [] }
-                it "finalises data into an empty string" do
+                it "finalises data into a frozen empty string" do
                   expect { subject }.to change(parser.message, :data).to("")
+                  expect(parser.message.data).to be_frozen
                 end
               end
 
               context "when there's lots of data" do
                 before { parser.message.data = [ "hey!", "", "how ya doing?" ] }
 
-                it "finalises data" do
+                it "finalises data into a frozen string" do
                   expect { subject }.to change(parser.message, :data).to("hey!\n\nhow ya doing?")
+                  expect(parser.message.data).to be_frozen
                 end
               end
             end
@@ -426,7 +452,7 @@ RSpec.describe LIRC::Messages::ResponseParser do
         let(:state) { :waiting_end }
 
         include_examples "raises parse error except when line is",
-                         :end
+                         :end, msg: "Expecting END, got %{line}"
 
         context "when line is END" do
           let(:line) { "END" }
@@ -437,6 +463,13 @@ RSpec.describe LIRC::Messages::ResponseParser do
             expect { subject }.not_to change(parser, :message)
           end
         end
+      end
+
+      context "when state is valid" do
+        let(:state) { :valid }
+        let(:line) { "BEGIN" }
+
+        include_examples "raises parse error", "Response was successfully parsed, but #parse was called again with %{line}"
       end
     end
   end

@@ -27,27 +27,24 @@ module LIRC
 
       def initialize(state = :waiting_begin)
         @state = state
-        @message = Response.new(nil, nil, nil)
+        @message = Response.new
       end
 
       # returns true when #message is ready
       def valid?
-        @state == :valid
+        @state.equal?(:valid)
       end
 
       def parse_line(line)
         line = line.chomp
-        unless (meth = PARSER_METHOD_FOR[@state])
-          raise ParseError, "unknown state #{@state}"
-        end
 
-        send(meth, line)
+        __send__(PARSER_METHOD_FOR.fetch(@state), line)
       end
 
       private
 
       def parse_begin(line)
-        unless line == "BEGIN"
+        unless line.eql?("BEGIN")
           raise ParseError, "unexpected line, expecting BEGIN, got #{line}"
         end
 
@@ -55,11 +52,11 @@ module LIRC
       end
 
       def parse_command(line)
-        if LIRC::Commands.all_commands.include?(line.split(" ").first)
-          @message.command = line
+        if Commands.all_commands.include?(line.split.first)
+          message.command = line
           @state = :waiting_success
-        elsif line == "SIGHUP"
-          @message.command = line
+        elsif line.eql?("SIGHUP")
+          message.command = line
           @state = :waiting_end
         else
           raise ParseError,
@@ -73,7 +70,7 @@ module LIRC
           raise ParseError, "Expecting SUCCESS or ERROR, got #{line}"
         end
 
-        @message.success = line == "SUCCESS"
+        message.success = line.eql?("SUCCESS")
         @state = :waiting_data
       end
 
@@ -93,13 +90,13 @@ module LIRC
           raise ParseError, "Expecting a number, got #{line}"
         end
 
-        @data_lines_to_read = line.to_i
-        @message.data = []
+        @data_lines_to_read = Integer(line)
+        message.data = []
         @state = :reading_data
       end
 
       def parse_end(line)
-        unless line == "END"
+        unless line.eql?("END")
           raise ParseError, "Expecting END, got #{line}"
         end
 
@@ -108,22 +105,22 @@ module LIRC
 
       def read_data(line)
         if @data_lines_to_read.zero?
-          unless line == "END"
-            raise ParseError, "Expected END, got more data: '#{line}'"
+          unless line.eql?("END")
+            raise ParseError, "Expecting END, got more data: '#{line}'"
           end
 
-          @message.data = @message.data&.join("\n")&.freeze
+          message.data = message.data&.join("\n").freeze
           @state = :valid
           return
         end
 
-        @message.data ||= []
+        message.data ||= []
 
         @data_lines_to_read -= 1
-        @message.data << line.to_s
+        message.data << line
       end
 
-      def raise_already_valid(_)
+      def raise_already_valid(line)
         raise ParseError,
           "Response was successfully parsed, " \
           "but #parse was called again with #{line}"
