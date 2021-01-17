@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-    matrix: &ruby-matrix
+    matrix:
       ruby:
         - ruby-2.4
         - ruby-2.5
@@ -23,8 +23,7 @@ jobs:
         - ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - &setup-ruby-with-matrix
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -32,8 +31,20 @@ jobs:
   test-build:
     name: Test building the gem
     runs-on: ${{ matrix.os }}
-    matrix: *ruby-matrix
+    matrix:
+      ruby:
+        - ruby-2.4
+        - ruby-2.5
+        - ruby-2.6
+        - ruby-2.7
+        - ruby-3.0
+      os:
+        - macos-latest
+        - ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - *setup-ruby-with-matrix
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
       - run: bundle exec gem build lirc.gem
