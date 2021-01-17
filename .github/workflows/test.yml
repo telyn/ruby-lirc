@@ -30,7 +30,7 @@ jobs:
   test-build:
     name: Test building the gem
     runs-on: ${{ matrix.os }}
-    matrix: *test-matrix
+    matrix: *ruby-matrix
     steps:
       - user: actions/checkout@v2
       - *setup-ruby-with-matrix
