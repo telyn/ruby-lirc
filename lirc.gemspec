@@ -4,7 +4,7 @@ require_relative "lib/lirc/version"
 
 Gem::Specification.new do |spec|
   spec.name          = "lirc"
-  spec.version       = Lirc::VERSION
+  spec.version       = LIRC::VERSION
   spec.authors       = ["Telyn Z."]
   spec.email         = ["175827+telyn@users.noreply.github.com"]
 

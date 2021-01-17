@@ -4,7 +4,6 @@ require "lirc/version"
 require "lirc/protocol"
 require "lirc/commands"
 
-module Lirc
-  class Error < StandardError; end
+module LIRC
   # Your code goes here...
 end
