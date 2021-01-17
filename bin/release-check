@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+
+tag = `git describe --tag`.chomp
+unless $?.success?
+  raise "git tag could not run - release check fails"
+end
+
+unless tag =~ /\Av([\d\.]+)\z/
+  raise "git tag (#{tag}) is not a valid version tag - release check fails"
+  exit 1
+end
+
+
+tag_version = Regexp.last_match[1]
+
+require "bundler/setup"
+unless tag_version.eql?(LIRC::VERSION)
+  raise "version from git tag (#{tag}) does not match LIRC::VERSION (#{LIRC::VERSION}) - release check fails"
+end
+
+puts "version from git tag (#{tag_version}) matches LIRC::VERSION"
+puts "release check succeeds - proceed with building gem"
