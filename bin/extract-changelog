@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+
+require "bundler/setup"
+require "lirc"
+
+version_number = LIRC::VERSION.gsub('.', '\\.')
+
+state = :waiting_for_version
+File.open('CHANGELOG.md', 'r').each_line do |line|
+  case state
+  when :waiting_for_version
+    if line =~ /\A## \[(.+?)\]/
+      latest_version = Regexp.last_match[1]
+      if latest_version == LIRC::VERSION
+        puts line
+        state = :reading_changelog
+      else
+        raise "Expected latest version in changelog to be '#{LIRC::VERSION}', was '#{latest_version}'"
+      end
+    end
+  when :reading_changelog
+    if line =~ /\A## /
+      state = :done
+    else
+      puts line
+    end
+  end
+  break if state == :done
+end
+if state != :done
+  raise "Got to end of file in #{state} state?"
+end

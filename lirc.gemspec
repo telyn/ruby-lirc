@@ -14,6 +14,8 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = Gem::Requirement.new(">= 2.5.0")
 
   spec.metadata["homepage_uri"] = spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/master/CONTRIBUTING.md"
+  spec.metadata["bug_tracker_uri"] = "#{spec.homepage}/issues"
   spec.metadata["source_code_uri"] = "https://github.com/telyn/ruby-lirc"
 
   # Specify which files should be added to the gem when it is released.
@@ -24,4 +26,14 @@ Gem::Specification.new do |spec|
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
+
+  spec.add_dependency "eventmachine", "~> 1.2"
+
+  spec.add_development_dependency "faker", "~> 2.14"
+  spec.add_development_dependency "fuubar", "~> 2.5"
+  spec.add_development_dependency "guard-rspec", "~> 4.7"
+  spec.add_development_dependency "mutant-rspec", "~> 0.10.21"
+  spec.add_development_dependency "rake", "~> 12.0"
+  spec.add_development_dependency "rspec", "~> 3.0"
+  spec.add_development_dependency "rubocop", "~> 1.2"
 end
