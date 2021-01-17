@@ -11,16 +11,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-    matrix:
-      ruby:
-        - ruby-2.4
-        - ruby-2.5
-        - ruby-2.6
-        - ruby-2.7
-        - ruby-3.0
-      os:
-        - macos-latest
-        - ubuntu-latest
+      matrix:
+        ruby:
+          - ruby-2.4
+          - ruby-2.5
+          - ruby-2.6
+          - ruby-2.7
+          - ruby-3.0
+        os:
+          - macos-latest
+          - ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: ruby/setup-ruby@v1
@@ -31,16 +31,17 @@ jobs:
   test-build:
     name: Test building the gem
     runs-on: ${{ matrix.os }}
-    matrix:
-      ruby:
-        - ruby-2.4
-        - ruby-2.5
-        - ruby-2.6
-        - ruby-2.7
-        - ruby-3.0
-      os:
-        - macos-latest
-        - ubuntu-latest
+    strategy:
+      matrix:
+        ruby:
+          - ruby-2.4
+          - ruby-2.5
+          - ruby-2.6
+          - ruby-2.7
+          - ruby-3.0
+        os:
+          - macos-latest
+          - ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: ruby/setup-ruby@v1
