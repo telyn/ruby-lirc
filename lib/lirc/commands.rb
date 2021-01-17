@@ -10,7 +10,7 @@ module LIRC
 
     def self.serialize_command_name(klass)
       klass = klass.to_s.split(":").fetch(-1)
-      rest = klass[1..].gsub(/[A-Z]/) do |chr|
+      rest = klass[1..-1].gsub(/[A-Z]/) do |chr|
         "_#{chr}"
       end
       "#{klass[0]}#{rest.upcase}"
