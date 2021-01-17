@@ -25,7 +25,7 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - run: bundle exec rspec spec/unit
+      - run: bundle exec rspec
   test-build:
     name: Test building the gem
     runs-on: ${{ matrix.os }}
