@@ -4,13 +4,13 @@ module LIRC
   module Commands
     def self.all_commands
       constants.keep_if do |x|
-        const_get(x).is_a?(Class)
-      end.map(&method(:serialize_command_name))
+        const_get(x).instance_of?(Class)
+      end.map(&public_method(:serialize_command_name))
     end
 
     def self.serialize_command_name(klass)
-      klass = klass.to_s.split(":")[-1]
-      rest = klass[1..-1].gsub(/[A-Z]/) do |chr|
+      klass = klass.to_s.split(":").fetch(-1)
+      rest = klass[1..].gsub(/[A-Z]/) do |chr|
         "_#{chr}"
       end
       "#{klass[0]}#{rest.upcase}"
@@ -26,13 +26,11 @@ module LIRC
       private
 
       def serialize_type
-        Commands.serialize_command_name(self.class.name)
+        Commands.serialize_command_name(self.class)
       end
 
       def serialize_args
-        return "" unless respond_to?(:members)
-
-        members.map(&method(:send)).compact.join(" ")
+        members.map(&public_method(:send)).compact.join(" ")
       end
     end
 

@@ -20,6 +20,20 @@ RSpec.describe LIRC::Commands do
       )
     end
   end
+
+  describe ".serialize_command_name" do
+    subject { described_class.serialize_command_name(klass) }
+    context "when klass has lots of capitals" do
+      let(:klass) { "LIRC::Commands::HypotheticalFutureCommand" }
+
+      it { is_expected.to eq "HYPOTHETICAL_FUTURE_COMMAND" }
+    end
+
+    context "when klass is a Class" do
+      let(:klass) { LIRC::Commands::SendOnce }
+      it { is_expected.to eq "SEND_ONCE" }
+    end
+  end
 end
 
 RSpec.describe LIRC::Commands::SendOnce do
@@ -40,6 +54,30 @@ RSpec.describe LIRC::Commands::SendOnce do
       let(:repeats) { nil }
 
       it { is_expected.to eq "SEND_ONCE cool_remote eject" }
+    end
+  end
+end
+
+RSpec.describe LIRC::Commands::Base do
+  TestClass = Class.new { include LIRC::Commands::Base }
+  TestStruct = Struct.new(:field_1, :field_2) { include LIRC::Commands::Base }
+
+  describe "#serialize" do
+    subject { instance.serialize }
+    context "when included in TestClass" do
+      let(:instance) { TestClass.new }
+      it { is_expected.to eq "TEST_CLASS" }
+    end
+
+    context "when included in a Struct" do
+      let(:instance) { TestStruct.new("value1", "value2") }
+      it { is_expected.to eq "TEST_STRUCT value1 value2" }
+
+      context "when one of the values was set to nil" do
+        let(:instance) { TestStruct.new(nil, "value2") }
+        it { is_expected.to eq "TEST_STRUCT value2" }
+
+      end
     end
   end
 end
