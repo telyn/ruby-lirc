@@ -44,4 +44,4 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - run: bundle exec gem build lirc.gem
+      - run: bundle exec gem build lirc.gemspec
