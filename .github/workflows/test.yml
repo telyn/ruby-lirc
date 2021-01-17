@@ -35,6 +35,3 @@ jobs:
       - user: actions/checkout@v2
       - *setup-ruby-with-matrix
       - run: bundle exec gem build lirc.gem
-  mutation:
-    name: Check mutation coverage
-    runs-on: ubuntu-latest
