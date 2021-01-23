@@ -86,7 +86,7 @@ module LIRC
       end
 
       def parse_data_length(line)
-        if line =~ /[^0-9]/
+        if line.match?(/\A[^0-9]/)
           raise ParseError, "Expecting a number, got #{line}"
         end
 

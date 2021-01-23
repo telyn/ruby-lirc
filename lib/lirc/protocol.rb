@@ -32,7 +32,7 @@ module LIRC
         parse_message_line(line)
       elsif line.eql?("BEGIN")
         parse_message_line(line)
-      elsif line =~ /^[0-9a-f]/
+      elsif line.match?(/\A[0-9a-f]/)
         receive_message(Messages::ButtonPress.parse(line))
       else
         logger.warn "Received unknown line from lirc: #{line}"
