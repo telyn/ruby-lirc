@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Upcoming Release
-- Bumped minimum supported version of ruby to 2.6.0 - this is because github's setup-ruby action no longer supports 2.5 on macos-latest. I won't fight it.
+- Bumped minimum supported version of ruby to 2.7.0
 - Test against ruby 3.0, 3.1 and 3.2
 - Update checkout action to v4
 

@@ -14,7 +14,6 @@ jobs:
       # github actions doesn't support anchors yet, so this is duplicated in the action below too 🙃
       matrix:
         ruby:
-          - ruby-2.6
           - ruby-2.7
           - ruby-3.0
           - ruby-3.1
@@ -35,7 +34,6 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - ruby-2.6
           - ruby-2.7
           - ruby-3.0
           - ruby-3.1
