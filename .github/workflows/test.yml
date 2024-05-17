@@ -11,16 +11,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # github actions doesn't support anchors yet, so this is duplicated in the action below too 🙃
       matrix:
         ruby:
-          - ruby-2.5
           - ruby-2.6
           - ruby-2.7
+          - ruby-3.0
+          - ruby-3.1
+          - ruby-3.2
         os:
           - macos-latest
           - ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -32,14 +35,16 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - ruby-2.5
           - ruby-2.6
           - ruby-2.7
+          - ruby-3.0
+          - ruby-3.1
+          - ruby-3.2
         os:
           - macos-latest
           - ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
