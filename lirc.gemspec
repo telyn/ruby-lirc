@@ -29,7 +29,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "eventmachine", "~> 1.2"
 
-  spec.add_development_dependency "faker", "~> 2.14"
+  spec.add_development_dependency "faker", "~> 3.3"
   spec.add_development_dependency "fuubar", "~> 2.5"
   spec.add_development_dependency "guard-rspec", "~> 4.7"
   spec.add_development_dependency "mutant-rspec", "~> 0.11.8"
